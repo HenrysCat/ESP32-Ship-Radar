@@ -1,5 +1,7 @@
 # Ship Radar
 
+![ESP32 Ship Radar](Photo.jpg)
+
 Descended from MatixYO's [ESP32 Plane Radar](https://github.com/MatixYo/ESP32-Plane-Radar) project, adapted from ADS-B aircraft tracking to AIS ship tracking with [AISStream](https://aisstream.io/).
 
 Firmware for the **ESP32-2424S012** board: an ESP32-C3 based module with an integrated **1.2" round GC9A01** display (240x240). Shows a circular **AIS ship radar** around your configured location, with **WiFiManager** for first-time setup.
