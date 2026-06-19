@@ -49,7 +49,7 @@ jobs:
       - name: Upload firmware artifacts
         uses: actions/upload-artifact@v4
         with:
-          name: plane-radar-supermini
+          name: ship-radar-supermini
           if-no-files-found: error
           path: |
             .pio/build/supermini/firmware-merged.bin

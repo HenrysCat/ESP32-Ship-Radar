@@ -7,7 +7,7 @@
 
 #include "config.h"
 #include "hardware/display.h"
-#include "services/adsb_client.h"
+#include "services/ais_client.h"
 #include "services/radar_location.h"
 #include "services/wifi_setup.h"
 #include "ui/radar_display.h"
@@ -19,7 +19,7 @@ namespace {
 bool g_radar_visible = false;
 unsigned long g_wifi_down_since = 0;
 unsigned long g_last_reconnect_ms = 0;
-unsigned long g_last_adsb_fetch_ms = 0;
+unsigned long g_last_ais_refresh_ms = 0;
 
 void showRadarIfConnected() {
   if (WiFi.status() != WL_CONNECTED) {
@@ -49,24 +49,13 @@ void handleBootButton() {
   }
 }
 
-void fetchAndDrawAircraft() {
-  const float fetch_km = ui::radar::fetchRadiusKm();
-  if (!services::adsb::fetchUpdate(services::location::lat(),
-                                   services::location::lon(), fetch_km)) {
-    handleBootButton();
-    return;
-  }
-  ui::radarDisplayRefreshAircraft();
-  handleBootButton();
-}
-
 }  // namespace
 
 void setup() {
   Serial.begin(115200);
   delay(500);
   Serial.println();
-  Serial.println("Plane Radar");
+  Serial.println("Ship Radar");
 
   bootButtonInit();
   displayInit();
@@ -75,7 +64,7 @@ void setup() {
   }
   services::location::init();
   ui::radar::rangeInit();
-  services::adsb::setPollFn(wifiLoop);
+  services::ais::init();
 
   if (wifiSetupConnect()) {
     showRadarIfConnected();
@@ -88,9 +77,10 @@ void loop() {
 
   if (WiFi.status() != WL_CONNECTED) {
     if (g_radar_visible) {
-      Serial.println("WiFi lost — will reconnect");
+      Serial.println("WiFi lost - will reconnect");
       g_radar_visible = false;
     }
+    services::ais::disconnect();
 
     if (g_wifi_down_since == 0) {
       g_wifi_down_since = millis();
@@ -109,9 +99,15 @@ void loop() {
     g_wifi_down_since = 0;
     if (!g_radar_visible) {
       showRadarIfConnected();
-    } else if (millis() - g_last_adsb_fetch_ms >= config::kAdsbFetchIntervalMs) {
-      g_last_adsb_fetch_ms = millis();
-      fetchAndDrawAircraft();
+    } else {
+      services::ais::loop(services::location::lat(), services::location::lon(),
+                          ui::radar::fetchRadiusKm());
+      const bool data_changed = services::ais::consumeDirty();
+      if (data_changed ||
+          millis() - g_last_ais_refresh_ms >= config::kAisDisplayRefreshIntervalMs) {
+        g_last_ais_refresh_ms = millis();
+        ui::radarDisplayRefreshVessels();
+      }
     }
   }
 

@@ -21,7 +21,7 @@ constexpr float kKmPerMile = 1.609344f;
 Preferences s_prefs;
 uint8_t s_range_index = kDefaultRangeIndex;
 bool s_use_miles = false;
-bool s_show_runways = true;
+bool s_show_runways = false;
 
 void saveRangeIndex() {
   if (!s_prefs.begin(kPrefsNamespace, false)) {
@@ -69,7 +69,7 @@ void rangeInit() {
   s_range_index =
       (saved < kRangePresetCount) ? saved : kDefaultRangeIndex;
   s_use_miles = s_prefs.getBool(kPrefsMilesKey, false);
-  s_show_runways = s_prefs.getBool(kPrefsRunwaysKey, true);
+  s_show_runways = s_prefs.getBool(kPrefsRunwaysKey, false);
   s_prefs.end();
 }
 
@@ -121,7 +121,7 @@ void formatCurrentRing3Label(char* buf, size_t len) {
 
 void unitsReset() {
   s_use_miles = false;
-  s_show_runways = true;
+  s_show_runways = false;
   if (s_prefs.begin(kPrefsNamespace, false)) {
     s_prefs.remove(kPrefsMilesKey);
     s_prefs.remove(kPrefsRunwaysKey);

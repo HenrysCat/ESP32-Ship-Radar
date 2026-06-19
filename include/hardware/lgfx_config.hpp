@@ -27,6 +27,7 @@ public:
       auto cfg = _panel.config();
       cfg.pin_cs = static_cast<int>(config::kDisplayPinCs);
       cfg.pin_rst = static_cast<int>(config::kDisplayPinRst);
+      cfg.pin_busy = -1;
       cfg.invert = config::kDisplayInvert;
       cfg.rgb_order = config::kDisplayRgbOrder;
       _panel.config(cfg);

@@ -9,7 +9,7 @@
 #include "config.h"
 #include "hardware/display.h"
 #include "hardware/display_font.h"
-#include "services/adsb_client.h"
+#include "services/ais_client.h"
 #include "services/radar_location.h"
 #include "ui/radar_range.h"
 #include "ui/radar_theme.h"
@@ -325,7 +325,7 @@ void noseTip(int cx, int cy, float heading_deg, int* tip_x, int* tip_y) {
   *tip_y = cy - static_cast<int>(lroundf(cosf(rad) * radar::kAircraftNoseLenPx));
 }
 
-void drawHeadingTriangle(int cx, int cy, float heading_deg, uint16_t color) {
+void drawShipSymbol(int cx, int cy, float heading_deg, uint16_t color) {
   constexpr float kDegToRad = 0.01745329252f;
   const float rad = heading_deg * kDegToRad;
   const float sin_h = sinf(rad);
@@ -335,16 +335,29 @@ void drawHeadingTriangle(int cx, int cy, float heading_deg, uint16_t color) {
   int tip_y = 0;
   noseTip(cx, cy, heading_deg, &tip_x, &tip_y);
 
-  const int base_x =
+  const int stern_x =
       cx - static_cast<int>(lroundf(sin_h * static_cast<float>(radar::kAircraftTailLenPx)));
-  const int base_y =
+  const int stern_y =
       cy + static_cast<int>(lroundf(cos_h * static_cast<float>(radar::kAircraftTailLenPx)));
 
-  const int wing_x = static_cast<int>(lroundf(cos_h * radar::kAircraftTailHalfPx));
-  const int wing_y = static_cast<int>(lroundf(sin_h * radar::kAircraftTailHalfPx));
+  const int beam_x = static_cast<int>(lroundf(cos_h * radar::kAircraftTailHalfPx));
+  const int beam_y = static_cast<int>(lroundf(sin_h * radar::kAircraftTailHalfPx));
+  const int shoulder_x =
+      cx + static_cast<int>(lroundf(sin_h * static_cast<float>(radar::kAircraftTailLenPx)));
+  const int shoulder_y =
+      cy - static_cast<int>(lroundf(cos_h * static_cast<float>(radar::kAircraftTailLenPx)));
 
-  s_draw->fillTriangle(tip_x, tip_y, base_x + wing_x, base_y + wing_y,
-                       base_x - wing_x, base_y - wing_y, color);
+  s_draw->fillTriangle(tip_x, tip_y, shoulder_x + beam_x, shoulder_y + beam_y,
+                       shoulder_x - beam_x, shoulder_y - beam_y, color);
+  s_draw->fillTriangle(stern_x + beam_x, stern_y + beam_y,
+                       stern_x - beam_x, stern_y - beam_y,
+                       shoulder_x + beam_x, shoulder_y + beam_y, color);
+  s_draw->fillTriangle(stern_x - beam_x, stern_y - beam_y,
+                       shoulder_x + beam_x, shoulder_y + beam_y,
+                       shoulder_x - beam_x, shoulder_y - beam_y, color);
+  s_draw->drawLine(stern_x + beam_x / 2, stern_y + beam_y / 2,
+                   stern_x - beam_x / 2, stern_y - beam_y / 2,
+                   radar::kColorBackground);
 }
 
 void drawSpeedVector(int cx, int cy, float heading_deg, float track_deg,
@@ -378,23 +391,23 @@ void applyTagStyle() {
   }
 }
 
-int measureTagBlockWidth(const services::adsb::Aircraft& plane) {
+int measureTagBlockWidth(const services::ais::Vessel& vessel) {
   applyTagStyle();
   int max_w = 0;
-  if (plane.callsign[0] != '\0') {
-    const int w = s_draw->textWidth(plane.callsign);
+  if (vessel.name[0] != '\0') {
+    const int w = s_draw->textWidth(vessel.name);
     if (w > max_w) {
       max_w = w;
     }
   }
-  if (plane.type[0] != '\0') {
-    const int w = s_draw->textWidth(plane.type);
+  if (vessel.type[0] != '\0') {
+    const int w = s_draw->textWidth(vessel.type);
     if (w > max_w) {
       max_w = w;
     }
   }
-  if (plane.alt[0] != '\0') {
-    const int w = s_draw->textWidth(plane.alt);
+  if (vessel.speed[0] != '\0') {
+    const int w = s_draw->textWidth(vessel.speed);
     if (w > max_w) {
       max_w = w;
     }
@@ -402,12 +415,12 @@ int measureTagBlockWidth(const services::adsb::Aircraft& plane) {
   return max_w;
 }
 
-void drawAircraftTag(int x, int y, const services::adsb::Aircraft& plane) {
+void drawVesselTag(int x, int y, const services::ais::Vessel& vessel) {
   initTagLabelMetrics();
   applyTagStyle();
 
   const int line_h = s_draw->fontHeight();
-  const int block_w = measureTagBlockWidth(plane);
+  const int block_w = measureTagBlockWidth(vessel);
   const int block_h = line_h * 3;
   int ly = y - block_h / 2;
 
@@ -427,25 +440,41 @@ void drawAircraftTag(int x, int y, const services::adsb::Aircraft& plane) {
   }
   ly = std::max(1, std::min(ly, radar::kSize - block_h - 1));
 
-  if (plane.callsign[0] != '\0') {
+  if (vessel.name[0] != '\0') {
     s_draw->setTextColor(radar::kColorLabel, radar::kColorBackground);
-    s_draw->drawString(plane.callsign, anchor_x, ly);
+    s_draw->drawString(vessel.name, anchor_x, ly);
   }
   ly += line_h;
 
-  if (plane.type[0] != '\0') {
+  if (vessel.type[0] != '\0') {
     s_draw->setTextColor(radar::kColorTagType, radar::kColorBackground);
-    s_draw->drawString(plane.type, anchor_x, ly);
+    s_draw->drawString(vessel.type, anchor_x, ly);
   }
   ly += line_h;
 
-  if (plane.alt[0] != '\0') {
+  if (vessel.speed[0] != '\0') {
     s_draw->setTextColor(radar::kColorTagAltitude, radar::kColorBackground);
-    s_draw->drawString(plane.alt, anchor_x, ly);
+    s_draw->drawString(vessel.speed, anchor_x, ly);
   }
 }
 
-struct AircraftDrawItem {
+void drawAisStatusIfEmpty(size_t vessel_count) {
+  if (vessel_count > 0) {
+    return;
+  }
+  const char* text = services::ais::statusText();
+  if (text == nullptr || text[0] == '\0') {
+    text = "NO VESSELS IN RANGE";
+  }
+  initTagLabelMetrics();
+  applyTagStyle();
+  s_draw->setTextDatum(textdatum_t::middle_center);
+  s_draw->setTextColor(radar::kColorLabel, radar::kColorBackground);
+  s_draw->drawString(text, radar::kCenterX, radar::kCenterY + 26);
+  s_draw->setTextDatum(textdatum_t::top_left);
+}
+
+struct VesselDrawItem {
   size_t index = 0;
   int x = 0;
   int y = 0;
@@ -458,9 +487,9 @@ struct BeyondDotDrawItem {
   int dist_sq = 0;
 };
 
-void sortDrawItemsFarFirst(AircraftDrawItem* items, size_t count) {
+void sortDrawItemsFarFirst(VesselDrawItem* items, size_t count) {
   for (size_t i = 1; i < count; ++i) {
-    const AircraftDrawItem key = items[i];
+    const VesselDrawItem key = items[i];
     size_t j = i;
     while (j > 0 && items[j - 1].dist_sq < key.dist_sq) {
       items[j] = items[j - 1];
@@ -482,14 +511,15 @@ void sortBeyondDotsFarFirst(BeyondDotDrawItem* items, size_t count) {
   }
 }
 
-void drawAircraft() {
+void drawVessels() {
   initLabelMetrics();
 
-  const size_t n = services::adsb::aircraftCount();
-  const services::adsb::Aircraft* planes = services::adsb::aircraftList();
+  const size_t n = services::ais::vesselCount();
+  const services::ais::Vessel* vessels = services::ais::vesselList();
+  drawAisStatusIfEmpty(n);
 
-  AircraftDrawItem items[services::adsb::kMaxAircraft];
-  BeyondDotDrawItem dots[services::adsb::kMaxAircraft];
+  VesselDrawItem items[services::ais::kMaxVessels];
+  BeyondDotDrawItem dots[services::ais::kMaxVessels];
   size_t draw_count = 0;
   size_t dot_count = 0;
 
@@ -497,12 +527,12 @@ void drawAircraft() {
     float dx_km = 0.0f;
     float dy_km = 0.0f;
     float dist_km = 0.0f;
-    offsetKmFromCenter(planes[i].lat, planes[i].lon, &dx_km, &dy_km, &dist_km);
+    offsetKmFromCenter(vessels[i].lat, vessels[i].lon, &dx_km, &dy_km, &dist_km);
 
     if (isInsideOuterRingKm(dist_km)) {
       int x = 0;
       int y = 0;
-      latLonToScreen(planes[i].lat, planes[i].lon, &x, &y);
+      latLonToScreen(vessels[i].lat, vessels[i].lon, &x, &y);
       items[draw_count].index = i;
       items[draw_count].x = x;
       items[draw_count].y = y;
@@ -513,7 +543,7 @@ void drawAircraft() {
 
     int dot_x = 0;
     int dot_y = 0;
-    if (!beyondRingEdgeDotFromLatLon(planes[i].lat, planes[i].lon, &dot_x,
+    if (!beyondRingEdgeDotFromLatLon(vessels[i].lat, vessels[i].lon, &dot_x,
                                      &dot_y)) {
       continue;
     }
@@ -533,13 +563,13 @@ void drawAircraft() {
     const size_t i = items[d].index;
     const int x = items[d].x;
     const int y = items[d].y;
-    drawSpeedVector(x, y, planes[i].nose_deg, planes[i].track_deg,
-                    planes[i].gs_knots, radar::kColorTrackVector);
-    drawHeadingTriangle(x, y, planes[i].nose_deg, radar::kColorAircraft);
+    drawSpeedVector(x, y, vessels[i].heading_deg, vessels[i].course_deg,
+                    vessels[i].sog_knots, radar::kColorTrackVector);
+    drawShipSymbol(x, y, vessels[i].heading_deg, radar::kColorAircraft);
   }
   for (size_t d = 0; d < draw_count; ++d) {
     const size_t i = items[d].index;
-    drawAircraftTag(items[d].x, items[d].y, planes[i]);
+    drawVesselTag(items[d].x, items[d].y, vessels[i]);
   }
 }
 
@@ -669,14 +699,14 @@ bool ensureFrameSprite() {
   return true;
 }
 
-// Double-buffered frame: composite the grid AND aircraft into the off-screen
+// Double-buffered frame: composite the grid and vessels into the off-screen
 // sprite, then blit it to the panel in a single pushSprite. Because the panel
 // is updated in one pass, labels never show an erase/redraw gap — no flicker.
 void renderFrame() {
   drawStaticGrid(s_frame);  // opens its own DrawScope(s_frame)
   {
     const DrawScope scope(s_frame);
-    drawAircraft();
+    drawVessels();
   }
   s_frame.pushSprite(0, 0);
   tft.setTextDatum(textdatum_t::top_left);
@@ -696,11 +726,11 @@ void radarDisplayDraw() {
   // Fallback when the sprite can't be allocated: draw straight to the panel.
   const DrawScope scope(tft);
   drawStaticGrid(tft);
-  drawAircraft();
+  drawVessels();
   tft.setTextDatum(textdatum_t::top_left);
 }
 
-void radarDisplayRefreshAircraft() {
+void radarDisplayRefreshVessels() {
   initPalette();
 
   if (ensureFrameSprite()) {

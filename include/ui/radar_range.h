@@ -8,11 +8,11 @@ namespace ui::radar {
 /**
  * Range presets (label on ring 3 = ¾ of outer radius).
  *
- * Recommended for ADS-B on a 1.28″ display:
- *   5 km  — pattern / very local (airfield vicinity)
- *  10 km  — default; neighborhood spotting
- *  15 km  — wider local area
- *  25 km  — metro / regional picture
+ * Recommended for AIS on a 1.2" display:
+ *   5 km  - harbor / very local
+ *  10 km  - default; nearby vessels
+ *  15 km  - wider coastal area
+ *  25 km  - regional picture
  *
  * Outer radius (for aircraft math) is ring-3 distance ÷ 0.75.
  */
